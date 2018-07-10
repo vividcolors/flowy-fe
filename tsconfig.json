@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "sourceMap": true,
+    "target": "es5", // TSはECMAScript 5に変換
+    "module": "es2015", // TSのモジュールはES Modulesとして出力
+    "jsx": "react",
+    "jsxFactory": "h",
+    "baseUrl": ".", 
+    "paths": {
+      "hyperapp": ["node_modules/hyperapp/hyperapp.d.ts"], 
+      "xhr": ["node_modules/xhr/index.d.ts"], 
+      "js-sha256": ["node_modules/js-sha256/index.d.ts"]
+    }, 
+    "lib": [
+      "es5", 
+      "dom", 
+      "es6", 
+      "es2015.promise", 
+      "webworker"
+    ]
+  }
+}

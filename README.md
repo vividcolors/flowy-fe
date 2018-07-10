@@ -1,1 +1,3 @@
-# flowy-frontend
+# flowy-fe
+
+flowyのフロントエンドプログラム
