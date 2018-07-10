@@ -4,7 +4,7 @@
   "repository": "https://github.com/vividcolors/flowy-fe.git",
   "author": "vividcolors, inc.",
   "license": "Apache2.0",
-  "private": true,
+  "private": false,
   "scripts": {
     "build": "webpack --config webpack.devel.js --display-error-details",
     "build:prod": "webpack --config webpack.prod.js --mode=production"
