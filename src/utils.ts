@@ -62,23 +62,16 @@ export function callIf<D>(pred:boolean, then:() => D): D {
     }
 }
 export function binToHex(bytes:number[]):string {
-    const len = bytes.length
-    var rv = ""
-    for (let i = 0; i < len; i++) {
-        if (bytes[i] < 16) {
-            rv += "0" + bytes[i].toString(16)
-        } else {
-            rv += bytes[i].toString(16)
-        }
-    }
+    const str = window.btoa(String.fromCharCode(...bytes))
+    const rv = str.replace(/\+/g, '-').replace(/\//g, '.').replace(/=/g, '_')
     return rv
 }
 export function hexToBin(str:string):number[] {
-    const len2 = str.length
-    const len = len2 / 2
-    var rv = new Array(len)
-    for (let i = 0; i < len; i++) {
-        rv[i] = parseInt(str.slice(i * 2, i * 2 + 2), 16)
+    const str2 = str.replace(/-/g, '+').replace(/\./g, '/').replace(/_/, '=')
+    const str3 = window.atob(str2)
+    var rv = new Array(str3.length)
+    for (let i = 0; i < str3.length; i++) {
+        rv[i] = str3.charCodeAt(i)
     }
     return rv
 }

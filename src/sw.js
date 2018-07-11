@@ -9,23 +9,16 @@ self.addEventListener('activate', function (event) {
 });
 
 function binToHex(bytes) {
-    var len = bytes.length;
-    var rv = "";
-    for (var i = 0; i < len; i++) {
-        if (bytes[i] < 16) {
-            rv += "0" + bytes[i].toString(16);
-        } else {
-            rv += bytes[i].toString(16);
-        }
-    }
+    var str = btoa(String.fromCharCode(...bytes));
+    var rv = str.replace(/\+/g, '-').replace(/\//g, '.').replace(/=/g, '_');
     return rv;
 }
 function hexToBin(str) {
-    var len2 = str.length;
-    var len = Math.floor(len2 / 2);
-    var rv = new Array(len);
-    for (var i = 0; i < len; i++) {
-        rv[i] = parseInt(str.slice(i * 2, i * 2 + 2), 16);
+    var str2 = str.replace(/-/g, '+').replace(/\./g, '/').replace(/_/, '=');
+    var str3 = atob(str2);
+    var rv = new Array(str3.length);
+    for (var i = 0; i < str3.length; i++) {
+        rv[i] = str3.charCodeAt(i);
     }
     return rv;
 }

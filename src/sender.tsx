@@ -149,8 +149,6 @@ function createDepotClient():DepotClient {
             req.setRequestHeader("x-goog-encryption-algorithm", "AES256")
             req.setRequestHeader("x-goog-encryption-key", binToBase64(key))
             req.setRequestHeader("x-goog-encryption-key-sha256", binToBase64(hash))
-            console.log("key", binToHex(key), binToBase64(key))
-            console.log("hash", binToHex(hash), binToBase64(hash))
             req.send(file)
         }
     }

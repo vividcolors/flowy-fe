@@ -1,23 +1,16 @@
 
 
 function binToHex(bytes) {
-    var len = bytes.length;
-    var rv = "";
-    for (var i = 0; i < len; i++) {
-        if (bytes[i] < 16) {
-            rv += "0" + bytes[i].toString(16);
-        } else {
-            rv += bytes[i].toString(16);
-        }
-    }
+    var str = btoa(String.fromCharCode(...bytes));
+    var rv = str.replace(/\+/g, '-').replace(/\//g, '.').replace(/=/g, '_');
     return rv;
 }
 function hexToBin(str) {
-    var len2 = str.length;
-    var len = Math.floor(len2 / 2);
-    var rv = new Array(len);
-    for (var i = 0; i < len; i++) {
-        rv[i] = parseInt(str.slice(i * 2, i * 2 + 2), 16);
+    var str2 = str.replace(/-/g, '+').replace(/\./g, '/').replace(/_/, '=');
+    var str3 = atob(str2);
+    var rv = new Array(str3.length);
+    for (var i = 0; i < str3.length; i++) {
+        rv[i] = str3.charCodeAt(i);
     }
     return rv;
 }
@@ -30,12 +23,11 @@ function extractUrl(url) {
   var search = url.slice(idx);
   var path = url.slice(0, idx);
   var elems = path.split('/');
-  var oid = elems[4];
-  var keyHex = elems[5];
-  var hashHex = elems[6];
+  var oid = elems[5];
+  var keyHex = elems[6];
+  var hashHex = elems[7];
   var key = hexToBin(keyHex);
   var hash = hexToBin(hashHex);
-  console.log('elems', path, elems);
   //console.log("sw-key", keyHex, binToBase64(key));
   //console.log('sw-hash', hashHex, binToBase64(hash));
   var url2 = "https://storage.googleapis.com/flowy-depot/" + oid + search;
@@ -56,8 +48,8 @@ function getIt(url, key, hash) {
 self.addEventListener('fetch', function (event) {
   console.log('fetch fired');
   var url = event.request.url;
-  if (url.lastIndexOf(__WEB_BASE__ + '/proxy/', 0) === 0 || 
-      url.lastIndexOf('https://flowy.jp/proxy/', 0) === 0) {
+  if (url.lastIndexOf(__WEB_BASE__ + '/fe/proxy/', 0) === 0 || 
+      url.lastIndexOf('https://flowy.jp/fe/proxy/', 0) === 0) {
     console.log('url matched');
     var props = extractUrl(event.request.url);
     event.respondWith(getIt(props.url, props.key, props.hash));

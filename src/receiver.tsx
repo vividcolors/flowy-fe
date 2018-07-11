@@ -104,7 +104,6 @@ function createSetupActions(api:ApiClient):SetupActions {
         }, 
         changePw: (e:Event) => ({pw, prob, ...rest}, actions) => {
             const el = e.target as HTMLInputElement
-            //console.log('changePw', el.value)
             return {pw:el.value, prob:putParam('pw', null, prob), ...rest}
         }, 
         cancel: () => ({parcelStatus, pwRequired, prob, ...rest}, actions) => {
@@ -238,11 +237,7 @@ function viewDownload(state:Download, actions:DownloadActions) {
         const key = hexToBin(keyHex)
         const hash = sha256.array(key)
         const hashHex = binToHex(hash)
-        console.log("key", keyHex, binToBase64(key))
-        console.log("hash", hashHex, binToBase64(hash))
-        console.log("parms", parser.pathname, parser.pathname.split("/"), oid, parser.search)
         const base = ('serviceWorker' in navigator) ? '/' : 'https://flowy.jp/'
-        //const base = 'https://flowy.jp/'
         return base + `fe/proxy/${oid}/${keyHex}/${hashHex}` + parser.search
     }
     return (
