@@ -579,7 +579,7 @@ const viewFeedbackForm = (state:FeedbackForm, actions:FeedbackFormActions) => {
                     </div>
                     <div class="modal-footer">
                         <button type="button" onclick={() => actions.dispose()} disabled={state.loading ? 'true' : ''}>キャンセル</button>
-                        <button type="submit" onclick={() => actions.submit()} disabled={state.loading ? 'true' : ''}>送信</button>
+                        <button type="submit" class="primary" onclick={() => actions.submit()} disabled={state.loading ? 'true' : ''}>送信</button>
                     </div>
                 </div>
             </form></div>

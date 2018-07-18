@@ -178,6 +178,7 @@ interface InputActions {
     generatePw: () => (s:Input, a:InputActions) => Input, 
     tick: (ti:number) => (s:Input, a:InputActions) => Input, 
     confirm: () => (s:Input, a:InputActions) => Input, 
+    reject: () => (s:Input, a:InputActions) => Input, 
     submit: () => (s:Input, a:InputActions) => Input, 
     submitDone: (c:Condition<ParcelCreationResult, Problem>) => (s:Input, a:InputActions) => Input
 }
@@ -280,6 +281,10 @@ function createInputActions(api:ApiClient):InputActions {
             window.requestAnimationFrame(() => actions.submit())
             return {confirmStatus:2, ...rest}
         }, 
+        reject: () => ({confirmStatus, ...rest}, actions) => {
+            trigger('notifyPoor', 'アップロードを中断しました');
+            return {confirmStatus:0, ...rest}
+        }, 
         submit: () => (state, actions) => {
             if (state.confirmStatus != 2) {
                 // confirmation required
@@ -316,17 +321,17 @@ function viewInput(state:Input, actions:InputActions, runState:Run, runActions:R
     function handleOnDragOver(e:DragEvent) {
         e.preventDefault();
         e.stopPropagation();
-        (e.target as HTMLElement).classList.add('ondrag');
+        (e.currentTarget as HTMLElement).classList.add('ondrag');
     }
     function handleOnDragLeave(e:DragEvent) {
         e.preventDefault();
         e.stopPropagation();
-        (e.target as HTMLElement).classList.remove('ondrag');
+        (e.currentTarget as HTMLElement).classList.remove('ondrag');
     }
     function handleOnDrop(e:DragEvent) {
         e.preventDefault();
         e.stopPropagation();
-        (e.target as HTMLElement).classList.remove('ondrag');
+        (e.currentTarget as HTMLElement).classList.remove('ondrag');
         actions.addFiles(e.dataTransfer.files)
     }
     function confirm() {
@@ -345,7 +350,8 @@ function viewInput(state:Input, actions:InputActions, runState:Run, runActions:R
                                 これにより快適なサービスを提供できますので、ご承諾をお願いいたします。</p>
                             </div>
                             <div class="modal-footer">
-                                <button type="submit" onclick={() => actions.confirm()}>上記を承諾して続ける</button>
+                                <button type="button" onclick={() => actions.reject()}>承諾しない</button>
+                                <button type="submit" class="primary" onclick={() => actions.confirm()}>上記を承諾して続ける</button>
                             </div>
                         </div>
                     </div>
@@ -360,14 +366,14 @@ function viewInput(state:Input, actions:InputActions, runState:Run, runActions:R
             <div class={`frame ${state.status == 1 ? 'loading' : ''}`} key="appFrame">
                 <div class="frame-header">ファイルの送信</div>
                 <div class="frame-body" id="input" key="input" onremove={onremove}>
-                    <div class="frame-main">
+                    <div class="frame-main" ondragover={handleOnDragOver} ondragleave={handleOnDragLeave} ondrop={handleOnDrop}>
                         <div class="control">
                             <label for="">ファイル（～2GB、～7個）</label>
                             <div class="file-list">
                                 {state.files.map(({key, value}, i) => (
                                     <div class="entry" oncreate={oncreate} onremove={onremove} key={key}><i class="material-icons">file_upload</i> {value.name}<span class="meta">({showSize(value.size)})</span><button onclick={() => actions.removeFile(i)}><i class="material-icons">close</i></button></div>
                                 ))}
-                                <label><input type="file" multiple value="" onchange={handleOnchange} /><span ondragover={handleOnDragOver} ondragleave={handleOnDragLeave} ondrop={handleOnDrop}>クリックしてファイルを選択<br />or<br />ファイルをドロップ</span></label>
+                                <label><input type="file" multiple value="" onchange={handleOnchange} /><span>クリックしてファイルを選択<br />or<br />ファイルをドロップ</span></label>
                             </div>
                             <small>{showParam('file', state.error, (e) => <span class="poor">{e}</span>)}</small>
                         </div>
@@ -380,7 +386,7 @@ function viewInput(state:Input, actions:InputActions, runState:Run, runActions:R
                         </div>
                     </div>
                     <div class="frame-footer">
-                        <button onclick={() => actions.submit()} disabled={(state.files.length > 0 && state.userStatus == 2) ? '' : 'true'}>アップロード</button>
+                        <button class="primary" onclick={() => actions.submit()} disabled={(state.files.length > 0 && state.userStatus == 2) ? '' : 'true'}>アップロード</button>
                     </div>
                 </div>
             </div>
@@ -594,7 +600,7 @@ function viewRun<R extends Run>(state:R, actions:RunActions) {
                             })}
                         </div>
                         <div class="survey-action">
-                            <button onclick={actions.commitQuestion} disabled={(nextEnabled) ? '' : 'true'}>確定する</button>
+                            <button class="primary" onclick={actions.commitQuestion} disabled={(nextEnabled) ? '' : 'true'}>確定する</button>
                         </div>
                     </div>
                 </div>

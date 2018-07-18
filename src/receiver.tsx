@@ -171,7 +171,7 @@ function viewSetup(state:Setup, actions:SetupActions) {
                                 </div>
                                 <div class="modal-footer">
                                     <button type="button" onclick={() => actions.cancel()}>キャンセル</button>
-                                    <button type="submit" onclick={() => actions.read()}>送信する</button>
+                                    <button type="submit" class="primary" onclick={() => actions.read()}>送信する</button>
                                 </div>
                             </div>
                         </div>
