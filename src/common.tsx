@@ -13,13 +13,15 @@ type MonitorCallback = (body:any) => (s:Monitor, a:MonitorActions) => Monitor;
 type LoginFormCallback = (c:{result:boolean, body:any}) => (s:LoginForm, a:LoginFormActions) => LoginForm|{};
 type LogoutCallback = (body:any) => (s:Logout, a:LogoutActions) => Logout|{};
 type FeedbackCallback = (result:boolean) => (s:FeedbackForm, a:FeedbackFormActions) => FeedbackForm|{}
+type ContactFormCallback = (result:boolean) => (s:ContactForm, a:ContactFormActions) => ContactForm|{}
 interface ApiClient {
     emailCheck: (s:SignupForm, k:SignupFormCallback) => void, 
     signup: (s:SignupForm, k:SignupFormCallback) => void, 
     monitor: (k:MonitorCallback) => void, 
     login: (s:LoginForm, k:LoginFormCallback) => void, 
     logout: (k:LogoutCallback) => void, 
-    feedback: (c:string, k:FeedbackCallback) => void
+    feedback: (c:string, e:string, k:FeedbackCallback) => void, 
+    contact: (c:ContactForm, k:ContactFormCallback) => void
 }
 
 /* [infra] XhrApiClient --------------------- */
@@ -93,14 +95,31 @@ const createXhrApiClient = () => (
                 k(body)
             })
         }, 
-        feedback: (c :string, k :FeedbackCallback) => {
+        feedback: (c :string, e :string, k :FeedbackCallback) => {
             xhr({
                 url: C.API_BASE + '/feedbacks', 
                 method: 'POST', 
                 withCredentials: true, 
                 json: true, 
                 body: {
-                    content: c
+                    content: c, 
+                    email: e
+                }
+            }, (err, res, body) => {
+                k(res.statusCode == 200)
+            })
+        }, 
+        contact: (c :ContactForm, k :ContactFormCallback) => {
+            xhr({
+                url: C.API_BASE + '/contacts', 
+                method: 'POST', 
+                withCredentials: true, 
+                json: true, 
+                body: {
+                    subject: c.subject, 
+                    body: c.body, 
+                    from: c.from, 
+                    name: c.name
                 }
             }, (err, res, body) => {
                 k(res.statusCode == 200)
@@ -205,6 +224,13 @@ const checkConfirmed = (confirmed) => {
 const checkCode = (code) => {
     if (code === "") {
         return '認証コードを入力してください。'
+    } else {
+        return null
+    }
+}
+const checkRequired = (x, name) => {
+    if (x === "") {
+        return name + 'を入力してください。'
     } else {
         return null
     }
@@ -513,12 +539,14 @@ const createLogoutActions = (cli :ApiClient):LogoutActions => (
 interface FeedbackForm extends Cons {
     tag :"Feedback", 
     content :string, 
+    email :string, 
     errmsg :string, 
     loading :boolean
 }
 interface FeedbackFormActions {
     create: () => (s:FeedbackForm, a:FeedbackFormActions) => FeedbackForm, 
     change: (e:Event) => (s:FeedbackForm, a:FeedbackFormActions) => FeedbackForm,
+    changeEmail: (e:Event) => (s:FeedbackForm, a:FeedbackFormActions) => FeedbackForm, 
     submitP: () => (s:FeedbackForm, a:FeedbackFormActions) => FeedbackForm, 
     submit: () => (s:FeedbackForm, a:FeedbackFormActions) => null|{}, 
     submitK: (result:boolean) => (s:FeedbackForm, a:FeedbackFormActions) => FeedbackForm|{}, 
@@ -528,10 +556,13 @@ const createFeedbackActions = (cli :ApiClient):FeedbackFormActions => (
     {
         create: () => (state, actions) => {
             trigger('event', {eventCategory:'feedback', eventAction:'init'})
-            return {tag:"Feedback", errmsg:"", content:"", loading:false}
+            return {tag:"Feedback", errmsg:"", content:"", email:"", loading:false}
         },
         change: (e) => ({content, ...rest}, actions) => {
             return {content:(e.target as HTMLTextAreaElement).value, ...rest}
+        }, 
+        changeEmail: (e) => ({email, ...rest}, actions) => {
+            return {email:(e.target as HTMLInputElement).value, ...rest}
         }, 
         submitP: () => ({loading, errmsg, ...rest}, actions) => {
             return {loading:true, errmsg:"", ...rest}
@@ -543,7 +574,7 @@ const createFeedbackActions = (cli :ApiClient):FeedbackFormActions => (
                 return {errmsg:"内容が入力されていません。", ...rest}
             } else {
                 actions.submitP()
-                cli.feedback(state.content, actions.submitK)
+                cli.feedback(state.content, state.email, actions.submitK)
                 return null
             }
         }, 
@@ -566,20 +597,173 @@ const createFeedbackActions = (cli :ApiClient):FeedbackFormActions => (
 const viewFeedbackForm = (state:FeedbackForm, actions:FeedbackFormActions) => {
     if (state.tag) { return (
         <div class="overlay oncreate" key="feedbackOverlay" onclick={function (e) {if (e.target === e.currentTarget) actions.dispose()}} oncreate={(e) => (oncreate(e), invalidateBody())} onremove={(e,d) => (onremove(e,d), validateBody())}>
-            <div class={`modal small ${state.loading && 'loading'}`}><form onsubmit={(e) => {e.preventDefault();return false}}>
+            <div class={`modal ${state.loading && 'loading'}`}><form onsubmit={(e) => {e.preventDefault();return false}}>
                 <div class="modal-header">ご意見箱</div>
                 <div class="modal-body">
                     <div class="modal-main">
                         {state.errmsg && <div class="alert">{state.errmsg}</div>}
-                        <p>回答はしません。今後の運営の参考にさせていただきますので、お気軽にお送りください。</p>
+                        <p class="small">今後の運営の参考にさせていただきますので、お気軽にお送りください。</p>
                         <div class="control">
                             <label for="">内容</label>
-                            <textarea class="default-input" onkeyup={actions.change}>{state.content}</textarea>
+                            <textarea class="default-input" oninput={actions.change}>{state.content}</textarea>
+                        </div>
+                        <div class="control">
+                            <label for="">メールアドレス</label>
+                            <input type="text" oninput={actions.changeEmail} value={state.email} />
+                            <small>flowyの運営会社から連絡しても構わない場合はご記載ください。</small>
                         </div>
                     </div>
                     <div class="modal-footer">
                         <button type="button" onclick={() => actions.dispose()} disabled={state.loading ? 'true' : ''}>キャンセル</button>
                         <button type="submit" class="primary" onclick={() => actions.submit()} disabled={state.loading ? 'true' : ''}>送信</button>
+                    </div>
+                </div>
+            </form></div>
+        </div>
+    )}
+}
+
+
+/* Contact -------------------------------- */
+interface ContactForm extends Cons {
+    tag :"Contact", 
+    subject :string, 
+    body :string, 
+    from :string, 
+    name :string, 
+    confirmed :boolean, 
+    prob :Problem, 
+    loading :boolean
+}
+interface ContactFormActions {
+    create: () => (s:ContactForm, a:ContactFormActions) => ContactForm, 
+    change: (e:Event) => (s:ContactForm, a:ContactFormActions) => ContactForm, 
+    changeBody: (e:Event) => (s:ContactForm, a:ContactFormActions) => ContactForm, 
+    check: (e:Event) => (s:ContactForm, a:ContactFormActions) => ContactForm, 
+    checkBody: (e:Event) => (s:ContactForm, a:ContactFormActions) => ContactForm, 
+    submit: () => (s:ContactForm, a:ContactFormActions) => ContactForm, 
+    submitK: (result:boolean) => (s:ContactForm, a:ContactFormActions) => ContactForm|{}, 
+    dispose: () => (s:ContactForm, a:ContactFormActions) => ContactForm|{}
+}
+const createContactFormActions = (cli :ApiClient):ContactFormActions => (
+    {
+        create: () => (state, actions) => {
+            trigger('event', {eventCategory:'contact', eventAction:'init'})
+            return {tag:"Contact", subject:"", body:"", from:"", name:"", confirmed:false, prob:problem(), loading:false}
+        },
+        change: (e) => (state, actions) => {
+            const el = e.target as HTMLInputElement
+            if (el.name == 'subject') {
+                const {subject:_, ...rest} = state
+                return {subject:el.value, ...rest}
+            } else if (el.name == 'from') {
+                const {from:_, ...rest} = state
+                return {from:el.value, ...rest}
+            } else if (el.name == 'name') {
+                const {name:_, ...rest} = state
+                return {name:el.value, ...rest}
+            } else if (el.name == 'confirmed') {
+                const {confirmed, ...rest} = state
+                return {confirmed:el.checked, ...rest}
+            }
+            throw new Error('ContactForm.change: no choice ' + e)
+        }, 
+        changeBody: (e) => ({body:_, ...rest}, actions) => {
+            const el = e.target as HTMLTextAreaElement
+            return {body:el.value, ...rest}
+        }, 
+        check: (e) => ({prob:problem, ...rest}, actions) => {
+            const el = e.target as HTMLInputElement
+            if (el.name == 'from') {
+                const problem2 = putParam('from', checkEmail(rest.from.trim()), problem)
+                return {prob:problem2, ...rest}
+            } else if (el.name == 'subject') {
+                const problem2 = putParam('subject', checkRequired(rest.subject.trim(), '件名'), problem)
+                return {prob:problem2, ...rest}
+            } else if (el.name == 'name') {
+                const problem2 = putParam('name', checkRequired(rest.name.trim(), 'お名前'), problem)
+                return {prob:problem2, ...rest}
+            } else if (el.name == 'confirmed') {
+                const problem2 = putParam('confirmed', checkConfirmed(rest.confirmed), problem)
+                return {prob:problem2, ...rest}
+            }
+            throw new Error('ContactForm.check: no choice ' + e)
+        }, 
+        checkBody: (e) => ({prob:problem, ...rest}, actions) => {
+            const el = e.target as HTMLTextAreaElement
+            const problem2 = putParam('body', checkRequired(rest.body.trim(), '本文'), problem)
+            return {prob:problem2, ...rest}
+        }, 
+        submit: () => (state, actions) => {
+            const p0 = putParam('from', checkEmail(state.from.trim()), problem())
+            const p1 = putParam('name', checkRequired(state.name.trim(), 'お名前'), p0)
+            const p2 = putParam('subject', checkRequired(state.subject.trim(), '件名'), p1)
+            const p3 = putParam('body', checkRequired(state.body.trim(), '本文'), p2)
+            const p4 = putParam('confirmed', checkConfirmed(state.confirmed), p3)
+            if (! noProblem(p4)) {
+                const {prob, ...rest} = state
+                return {prob:p4, ...rest}
+            } else {
+                cli.contact(state, actions.submitK)
+                const {prob, loading, ...rest} = state
+                return {prob:p4, loading:true, ...rest}
+            }
+        }, 
+        submitK: (result) => (state, actions) => {
+            if (result) {
+                trigger('notifyFine', 'お問い合わせの送信を完了しました。')
+                trigger('event', {eventCategory:'contact', eventAction:'finish'})
+                return {tag:""}
+            } else {
+                const {prob:_, loading:_2, ...rest} = state
+                const p = putDetail("エラーが発生しました。しばらくしてから再度お試しください。", problem())
+                return {prob:p, loading:false, ...rest}
+            }
+        }, 
+        dispose: () => (state, actions) => {
+            trigger('event', {eventCategory:'contact', eventAction:'cancel'})
+            return {tag:""}
+        }
+    }
+)
+const viewContactForm = (state:ContactForm, actions:ContactFormActions) => {
+    if (state.tag) { return (
+        <div class="overlay oncreate" key="feedbackOverlay" onclick={function (e) {if (e.target === e.currentTarget) actions.dispose()}} oncreate={(e) => (oncreate(e), invalidateBody())} onremove={(e,d) => (onremove(e,d), validateBody())}>
+            <div class={`modal ${state.loading && 'loading'}`}><form onsubmit={(e) => {e.preventDefault();return false}}>
+                <div class="modal-header">お問い合わせ</div>
+                <div class="modal-body">
+                    <div class="modal-main">
+                        {showDetail(state.prob, (d) => <div class="alert">{d}</div>)}
+                        <p class="small">このフォームからお問い合わせをお送りください。<br />
+                        このフォームで不都合がある場合には<a href="mailto:info@flowy.jp">info@flowy.jp</a>に直接メールをお送りください。</p>
+                        <div class="control">
+                            <label for="">お名前</label>
+                            <input class="default-input" type="text" oninput={actions.change} onblur={actions.check} name="name" value={state.name} />
+                            <small>{showParam('name', state.prob, e => <span class="poor">{e}</span>)}</small>
+                        </div>
+                        <div class="control">
+                            <label for="">メールアドレス</label>
+                            <input type="text" oninput={actions.change} onblur={actions.check} name="from" value={state.from} />
+                            <small>お間違いの無いようご注意ください。<br />{showParam('from', state.prob, e => <span class="poor">{e}</span>)}</small>
+                        </div>
+                        <div class="control">
+                            <label for="">件名</label>
+                            <input type="text" oninput={actions.change} onblur={actions.check} name="subject" value={state.subject} />
+                            <small>{showParam('subject', state.prob, e => <span class="poor">{e}</span>)}</small>
+                        </div>
+                        <div class="control">
+                            <label for="">本文</label>
+                            <textarea oninput={actions.changeBody} onblur={actions.checkBody} name="body">{state.body}</textarea>
+                            <small>{showParam('body', state.prob, e => <span class="poor">{e}</span>)}</small>
+                        </div>
+                        <div class="control">
+                            <label><input type="checkbox" name="confirmed" checked={state.confirmed ? 'checked' : ''} onchange={actions.change} onblur={actions.check} /><span><a href="/privacy.html#handling" target="_blank">個人情報の取扱いについて</a>に同意する</span></label>
+                            <small>{showParam('confirmed', state.prob, (e) => <span class="poor">{e}</span>)}</small>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" onclick={() => actions.dispose()} disabled={state.loading ? 'true' : ''}>キャンセル</button>
+                        <button type="submit" class="primary" onclick={() => actions.submit()} disabled={(state.loading) ? 'true' : ''}>送信</button>
                     </div>
                 </div>
             </form></div>
@@ -690,7 +874,8 @@ interface State {
     logout:Logout, 
     monitor:Monitor, 
     notification:Notification, 
-    feedbackForm:FeedbackForm
+    feedbackForm:FeedbackForm, 
+    contactForm:ContactForm
 }
 
 interface Actions {
@@ -699,7 +884,8 @@ interface Actions {
     logout:LogoutActions, 
     monitor:MonitorActions, 
     notification:NotificationActions, 
-    feedbackForm:FeedbackFormActions
+    feedbackForm:FeedbackFormActions, 
+    contactForm:ContactFormActions
 }
 const cli = createXhrApiClient()
 const actions:Actions = {
@@ -708,7 +894,8 @@ const actions:Actions = {
     logout:createLogoutActions(cli), 
     monitor:createMonitorActions(cli), 
     notification:createNotificationActions(), 
-    feedbackForm:createFeedbackActions(cli)
+    feedbackForm:createFeedbackActions(cli), 
+    contactForm:createContactFormActions(cli)
 }
 
 
@@ -720,6 +907,7 @@ const view = (state :State, actions :Actions) => {
             {viewLoginForm(state.loginForm, actions.loginForm)}
             {viewNotification(state.notification, actions.notification)}
             {viewFeedbackForm(state.feedbackForm, actions.feedbackForm)}
+            {viewContactForm(state.contactForm, actions.contactForm)}
         </div>
     )
 }
@@ -730,7 +918,8 @@ const initialState = {
     logout: {tag:""},  // effective null
     monitor: {tag:"Monitor", info:null, quitSession:false, waited:false}, 
     notification: {tag:"Notification", serial:1, queue:[], msg:null}, 
-    feedbackForm: {tag:""}  // effective null
+    feedbackForm: {tag:""},  // effective null
+    contactForm: {tag:""}  // effective null
 }
 
 window.addEventListener('load', () => {
@@ -739,6 +928,7 @@ document.body.addEventListener('signupWanted', main.signupForm.create)
 document.body.addEventListener('loginWanted', main.loginForm.create)
 document.body.addEventListener('logoutWanted', main.logout.submit)
 document.body.addEventListener('feedbackWanted', main.feedbackForm.create)
+document.body.addEventListener('contactWanted', main.contactForm.create)
 document.body.addEventListener('checkUser', main.monitor.getLoginStatus)
 document.body.addEventListener('notifyFine', (e:CustomEvent) => (main.notification.addFine(e.detail)))
 document.body.addEventListener('notifyPoor', (e:CustomEvent) => main.notification.addPoor(e.detail))

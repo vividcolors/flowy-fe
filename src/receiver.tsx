@@ -228,6 +228,9 @@ function createDownloadActions():DownloadActions {
     }
 }
 function viewDownload(state:Download, actions:DownloadActions) {
+    function isiOS() {
+        return navigator.userAgent.match(/ipad|iphone/i) !== null
+    }
     function wrapUrl(url:string):string {
         const parser = document.createElement('a')
         parser.href = url
@@ -252,6 +255,7 @@ function viewDownload(state:Download, actions:DownloadActions) {
                             {state.files.map((file, idx) => (
                                 <a href={wrapUrl(file.url)} key={idx} onclick={() => (actions.getFile(idx), true)} class={`download ${file.downloaded ? 'downloaded' : ''}`}>{file.name}<span class="meta">({showSize(file.size)})</span></a>
                             ), state.files)}
+                            {callIf(isiOS(), () => <small><a href="/contents/with-ios.html" target="_blank">iPhoneでPDFや動画を閲覧・保存できない方はこちら</a>もお読みください。</small>)}
                         </div>
                     </div>
                 </div>

@@ -200,6 +200,7 @@ function createInitialInput():Input {
 }
 function createInputActions(api:ApiClient):InputActions {
     const checkFile = (file:File) => {
+        var msg = null  
         if (file.size > C.FILESIZE_MAX) {
             return '選択されたファイルのうち2GB超のものが除外されました。'
         } else {
@@ -243,6 +244,9 @@ function createInputActions(api:ApiClient):InputActions {
             }
             const len = fl.length;
             error = putParam('file', null, error)
+            if (len == 0) {
+                error = putParam('file', 'フォルダはアップロードできません。', error)
+            }
             for (let i = 0; i < len; i++) {
                 const msg = checkFile(fl[i])
                 if (msg === null) {
@@ -316,6 +320,10 @@ function createInputActions(api:ApiClient):InputActions {
 }
 function viewInput(state:Input, actions:InputActions, runState:Run, runActions:RunActions) {
     function handleOnchange(e) {
+        if (window.navigator.userAgent.toLowerCase().indexOf('trident') != -1 && e.target.files.length == 0) {
+            // IE11 triggers ONCHANGE event twice erronously.
+            return;
+        }
         actions.addFiles(e.target.files)
     }
     function handleOnDragOver(e:DragEvent) {
@@ -373,16 +381,16 @@ function viewInput(state:Input, actions:InputActions, runState:Run, runActions:R
                                 {state.files.map(({key, value}, i) => (
                                     <div class="entry" oncreate={oncreate} onremove={onremove} key={key}><i class="material-icons">file_upload</i> {value.name}<span class="meta">({showSize(value.size)})</span><button onclick={() => actions.removeFile(i)}><i class="material-icons">close</i></button></div>
                                 ))}
-                                <label><input type="file" multiple value="" onchange={handleOnchange} /><span>クリックしてファイルを選択<br />or<br />ファイルをドロップ</span></label>
+                                <label><input type="file" multiple value="" onchange={handleOnchange} /><span>クリックしてファイルを選択<br />or<br />ファイルをドロップ（フォルダは不可）</span></label>
                             </div>
                             <small>{showParam('file', state.error, (e) => <span class="poor">{e}</span>)}</small>
                         </div>
                         <div class="control">
                             <label for="">DLパスワード（設定したい場合のみ入力）</label>
                             <div class="input-with-button">
-                                <input type={(state.timeoutId != 0) ? 'text' : 'password'} value={state.pw} onkeyup={actions.changePw} /><button type="button" onclick={() => actions.generatePw()}><i class="material-icons">swap_horiz</i></button>
+                                <input type={(state.timeoutId != 0) ? 'text' : 'password'} value={state.pw} oninput={actions.changePw} /><button type="button" onclick={() => actions.generatePw()}><i class="material-icons">swap_horiz</i></button>
                             </div>
-                            <small>設定されたパスワードはまた後で確認できます。</small>
+                            <small>設定したパスワードは後で確認できます。[<i class="material-icons">swap_horiz</i>]で生成もできます。</small>
                         </div>
                     </div>
                     <div class="frame-footer">
@@ -842,6 +850,7 @@ function viewFinish(state:Finish, actions:FinishActions, runState:Run, runAction
                                 <div class="input-with-button" id="urlInputs">
                                     <input type="text" id="urlInput" value={state.url} readonly onfocus={(e) => e.target.select()} /><button type="button" onclick={() => copyToClip(state.url, 'URL')}><i class="material-icons">content_copy</i></button>
                                 </div>
+                                <small>[<i class="material-icons">content_copy</i>]でURLをコピーできます。</small>
                             </div>
                             {callIf(typeof state.pw === 'string' && state.pw != "", () =>
                                 <div class="control">
