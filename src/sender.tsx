@@ -282,7 +282,8 @@ function createInputActions(api:ApiClient):InputActions {
             }
         }, 
         confirm: () => ({confirmStatus, ...rest}, actions) => {
-            window.requestAnimationFrame(() => actions.submit())
+            window.setTimeout(() => actions.submit(), 400)
+            //window.requestAnimationFrame(() => actions.submit())
             return {confirmStatus:2, ...rest}
         }, 
         reject: () => ({confirmStatus, ...rest}, actions) => {
@@ -348,8 +349,8 @@ function viewInput(state:Input, actions:InputActions, runState:Run, runActions:R
         }
         return (
             <div class="overlay" key="authOverlay" oncreate={(e) => (oncreate(e), invalidateBody())} onremove={(e,d) => (onremove(e,d), validateBody())}>
-                <form onsubmit={(e) => {e.preventDefault();return false}} key="confirmForm">
-                    <div class="modal small" key="confirmModal">
+                <div class="modal small" key="confirmModal">
+                    <form onsubmit={(e) => {e.preventDefault();return false}} key="confirmForm">
                         <div class="modal-header">ご利用にあたって</div>
                         <div class="modal-body">
                             <div class="modal-main">
@@ -362,8 +363,8 @@ function viewInput(state:Input, actions:InputActions, runState:Run, runActions:R
                                 <button type="submit" class="primary" onclick={() => actions.confirm()}>上記を承諾して続ける</button>
                             </div>
                         </div>
-                    </div>
-                </form>
+                    </form>
+                </div>
             </div>
         )
     }
@@ -379,7 +380,7 @@ function viewInput(state:Input, actions:InputActions, runState:Run, runActions:R
                             <label for="">ファイル（～2GB、～7個）</label>
                             <div class="file-list">
                                 {state.files.map(({key, value}, i) => (
-                                    <div class="entry" oncreate={oncreate} onremove={onremove} key={key}><i class="material-icons">file_upload</i> {value.name}<span class="meta">({showSize(value.size)})</span><button onclick={() => actions.removeFile(i)}><i class="material-icons">close</i></button></div>
+                                    <div class="entry" oncreate={oncreate} onremove={onremove} key={key}><i class="material-icons">file_upload</i> {value.name}<span class="meta">({showSize(value.size)})</span><button onclick={() => actions.removeFile(i)} title="削除"><i class="material-icons">close</i></button></div>
                                 ))}
                                 <label><input type="file" multiple value="" onchange={handleOnchange} /><span>クリックしてファイルを選択<br />or<br />ファイルをドロップ（フォルダは不可）</span></label>
                             </div>
@@ -388,7 +389,7 @@ function viewInput(state:Input, actions:InputActions, runState:Run, runActions:R
                         <div class="control">
                             <label for="">DLパスワード（設定したい場合のみ入力）</label>
                             <div class="input-with-button">
-                                <input type={(state.timeoutId != 0) ? 'text' : 'password'} value={state.pw} oninput={actions.changePw} /><button type="button" onclick={() => actions.generatePw()}><i class="material-icons">swap_horiz</i></button>
+                                <input type={(state.timeoutId != 0) ? 'text' : 'password'} value={state.pw} oninput={actions.changePw} /><button type="button" onclick={() => actions.generatePw()} title="パスワード生成"><i class="material-icons">swap_horiz</i></button>
                             </div>
                             <small>設定したパスワードは後で確認できます。[<i class="material-icons">swap_horiz</i>]で生成もできます。</small>
                         </div>
@@ -397,6 +398,7 @@ function viewInput(state:Input, actions:InputActions, runState:Run, runActions:R
                         <button class="primary" onclick={() => actions.submit()} disabled={(state.files.length > 0 && state.userStatus == 2) ? '' : 'true'}>アップロード</button>
                     </div>
                 </div>
+                <div class={`spinner ${state.status == 1 ? 'enabled' : ''}`}></div>
             </div>
         </div>
     )
@@ -768,6 +770,9 @@ function viewUpload(state:Upload, actions:UploadActions, runState:Run, runAction
                                 <div class="lead">アップロードしています({showSize(state.totalSize)})</div>
                                 <div class="rate"><span>{p}</span>%</div>
                                 <div class="bar"><div class="progress"><div class="progress-rate" style={{width:p+'%'}}></div></div></div>
+                                {callIf(window.navigator.userAgent.toLowerCase().indexOf('edge') != -1, () => (
+                                    <small><span class="poor">MS Edgeではパーセンテージが増えない場合があります。</span></small>
+                                ))}
                             </div>
                         </div>
                     ))}
@@ -848,7 +853,7 @@ function viewFinish(state:Finish, actions:FinishActions, runState:Run, runAction
                             <div class="control">
                                 <label for="">ダウンロードURL</label>
                                 <div class="input-with-button" id="urlInputs">
-                                    <input type="text" id="urlInput" value={state.url} readonly onfocus={(e) => e.target.select()} /><button type="button" onclick={() => copyToClip(state.url, 'URL')}><i class="material-icons">content_copy</i></button>
+                                    <input type="text" id="urlInput" value={state.url} readonly onfocus={(e) => e.target.select()} /><button type="button" onclick={() => copyToClip(state.url, 'URL')} title="コピー"><i class="material-icons">content_copy</i></button>
                                 </div>
                                 <small>[<i class="material-icons">content_copy</i>]でURLをコピーできます。</small>
                             </div>
@@ -856,7 +861,7 @@ function viewFinish(state:Finish, actions:FinishActions, runState:Run, runAction
                                 <div class="control">
                                     <label for="">設定パスワード</label>
                                     <div class="input-with-button">
-                                        <input type="password" id="pwInput" value={state.pw} readonly onfocus={(e) => e.target.select()} /><button type="button" onclick={() => copyToClip(state.pw, 'パスワード')}><i class="material-icons">content_copy</i></button>
+                                        <input type="password" id="pwInput" value={state.pw} readonly onfocus={(e) => e.target.select()} /><button type="button" onclick={() => copyToClip(state.pw, 'パスワード')} title="コピー"><i class="material-icons">content_copy</i></button>
                                     </div>
                                 </div>
                             )}

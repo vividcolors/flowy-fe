@@ -143,6 +143,7 @@ interface Notification extends Cons {
 interface NotificationActions {
     addFine: (txt:string) => (s:Notification, a:NotificationActions) => Notification|null, 
     addPoor: (txt:string) => (s:Notification, a:NotificationActions) => Notification|null, 
+    addFav: (cnt:number) => (s:Notification, a:NotificationActions) => Notification|null, 
     pick: () => (s:Notification, a:NotificationActions) => Notification|null, 
     dispose: (id:number) => (s:Notification, a:NotificationActions) => Notification|null
 }
@@ -155,6 +156,10 @@ const createNotificationActions = ():NotificationActions => (
         addPoor: (txt) => ({queue, serial, ...rest}, actions) => {
             window.requestAnimationFrame(actions.pick)
             return {queue: append({cls:'poor', txt:txt, id:serial}, queue), serial:serial + 1, ...rest}
+        }, 
+        addFav: (cnt) => ({queue, serial, ...rest}, actions) => {
+            window.requestAnimationFrame(actions.pick)
+            return {queue: append({cls:'fav', txt:""+cnt, id:serial}, queue), serial:serial + 1, ...rest}
         }, 
         pick: () => ({msg, queue, ...rest}, actions) => {
             if (!msg && queue.length > 0) {
@@ -178,11 +183,19 @@ const createNotificationActions = ():NotificationActions => (
 )
 const viewNotification = (state:Notification, actions:NotificationActions) => {
     if (state.msg) {
-        return (
-            <div class={`notification oncreate ${state.msg.cls}`} key={state.msg.id} oncreate={oncreate} onremove={onremove}>
-                <p>{state.msg.txt}</p>
-            </div>
-        )
+        if (state.msg.cls == 'fav') {
+            return (
+                <div class={`notification oncreate fav`} key={state.msg.id} oncreate={oncreate} onremove={onremove}>
+                    <p>あなたのflowyでの送信に{state.msg.txt}人が<i class="material-icons">thumb_up</i>しました。</p>
+                </div>
+            )
+        } else {
+            return (
+                <div class={`notification oncreate ${state.msg.cls}`} key={state.msg.id} oncreate={oncreate} onremove={onremove}>
+                    <p>{state.msg.txt}</p>
+                </div>
+            )
+        }
     }
 }
 
@@ -398,7 +411,7 @@ const viewSignupForm = (state:SignupForm, actions:SignupFormActions) => {
                     <button type="button" onclick={() => actions.dispose()} disabled={state.loading ? 'true' : ''}>キャンセル</button>
                     <button type="submit" onclick={() => actions.next()} disabled={state.loading ? 'true' : ''} class="">次へ</button>
                 </div>
-            </form></div>
+            </form><div class={`spinner ${state.loading ? 'enabled' : ''}`}></div></div>
         </div>
     )} else if (state.step == 1) { return (
         <div class="overlay oncreate" key="signupOverlay" onclick={function (e) {if (e.target === e.currentTarget) actions.dispose()}} oncreate={(e) => (oncreate(e), invalidateBody())} onremove={(e,d) => (onremove(e,d), validateBody())}>
@@ -419,7 +432,7 @@ const viewSignupForm = (state:SignupForm, actions:SignupFormActions) => {
                     <button type="button" onclick={() => actions.back()} disabled={state.loading ? 'true' : ''}>戻る</button>
                     <button type="submit" onclick={() => actions.submit()} disabled={state.loading ? 'true' : ''}>登録する</button>
                 </div>
-            </form></div>
+            </form><div class={`spinner ${state.loading ? 'enabled' : ''}`}></div></div>
         </div>
     )}
 }
@@ -505,7 +518,7 @@ const viewLoginForm = (state:LoginForm, actions:LoginFormActions) => {
                     <button type="button" onclick={() => actions.dispose()} disabled={state.loading ? 'true' : ''}>キャンセル</button>
                     <button type="submit" onclick={() => actions.submit()} disabled={state.loading ? 'true' : ''}>ログイン</button>
                 </div>
-            </form></div>
+            </form><div class={`spinner ${state.loading ? 'enabled' : ''}`}></div></div>
         </div>
     )}
 }
@@ -605,7 +618,7 @@ const viewFeedbackForm = (state:FeedbackForm, actions:FeedbackFormActions) => {
                         <p class="small">今後の運営の参考にさせていただきますので、お気軽にお送りください。</p>
                         <div class="control">
                             <label for="">内容</label>
-                            <textarea class="default-input" oninput={actions.change}>{state.content}</textarea>
+                            <textarea class="default-input" oninput={actions.change} value={state.content} />
                         </div>
                         <div class="control">
                             <label for="">メールアドレス</label>
@@ -618,7 +631,7 @@ const viewFeedbackForm = (state:FeedbackForm, actions:FeedbackFormActions) => {
                         <button type="submit" class="primary" onclick={() => actions.submit()} disabled={state.loading ? 'true' : ''}>送信</button>
                     </div>
                 </div>
-            </form></div>
+            </form><div class={`spinner ${state.loading ? 'enabled' : ''}`}></div></div>
         </div>
     )}
 }
@@ -753,7 +766,7 @@ const viewContactForm = (state:ContactForm, actions:ContactFormActions) => {
                         </div>
                         <div class="control">
                             <label for="">本文</label>
-                            <textarea oninput={actions.changeBody} onblur={actions.checkBody} name="body">{state.body}</textarea>
+                            <textarea oninput={actions.changeBody} onblur={actions.checkBody} name="body" value={state.body} />
                             <small>{showParam('body', state.prob, e => <span class="poor">{e}</span>)}</small>
                         </div>
                         <div class="control">
@@ -766,9 +779,55 @@ const viewContactForm = (state:ContactForm, actions:ContactFormActions) => {
                         <button type="submit" class="primary" onclick={() => actions.submit()} disabled={(state.loading) ? 'true' : ''}>送信</button>
                     </div>
                 </div>
-            </form></div>
+            </form><div class={`spinner ${state.loading ? 'enabled' : ''}`}></div></div>
         </div>
     )}
+}
+
+
+/* WallManager ---------------------------- */
+type WallCallback = (info:any) => any
+interface WallManager extends Cons {
+    tag: "WallManager", 
+    status: number,  // 0:not-showing, 1:showing, 2:interval
+    queue :{show:WallCallback, info:any}[]
+}
+interface WallManagerActions {
+    request: (wall:{show:WallCallback, info:any}) => (s:WallManager, a:WallManagerActions) => WallManager, 
+    resume: () => (s:WallManager, a:WallManagerActions) => WallManager, 
+    hidden: () => (s:WallManager, a:WallManagerActions) => WallManager
+}
+const createWallManagerActions = ():WallManagerActions => {
+    return {
+        request: (wall:{show:WallCallback, info:any}) => ({status, queue, ...rest}, actions) => {
+            console.log('')
+            if (status == 0) {
+                window.requestAnimationFrame(() => wall.show(wall.info))
+                return {status:1, queue:queue, ...rest}
+            } else {
+                return {status:status, queue:append(wall, queue), ...rest}
+            }
+        }, 
+        resume: () => ({status, queue, ...rest}, actions) => {
+            if (status != 2 || queue.length == 0) {
+                throw new Error('WallManager.resume inconsistent status:' + status + ", len:" + queue.length)
+            }
+            const wall = queue[0]
+            window.requestAnimationFrame(() => wall.show(wall.info))
+            return {status:1, queue:remove(0, 1, queue), ...rest}
+        }, 
+        hidden: () => ({status, queue, ...rest}, actions) => {
+            if (status != 1) {
+                throw new Error('WallManager.hidden inconsistent status:' + status)
+            }
+            if (queue.length == 0) {
+                return {status:0, queue:queue, ...rest}
+            } else {
+                window.setTimeout(actions.resume, 500)
+                return {status:2, queue:queue, ...rest}
+            }
+        }
+    }
 }
 
 
@@ -778,7 +837,8 @@ interface Monitor extends Cons {
     info: any, 
     quitSession: boolean, 
     waited: boolean, 
-    lastPage: string
+    lastPage: string, 
+    favStatus: number,  // -1:no-need, 0:waiting, 1:showing, 2:done
 }
 interface MonitorActions {
     monitor: () => (s:Monitor, a:MonitorActions) => void, 
@@ -788,7 +848,9 @@ interface MonitorActions {
     getLoginStatus: () => (s:Monitor, a:MonitorActions) => Monitor|void, 
     handleParcelSend: () => (s:Monitor, a:MonitorActions) => Monitor, 
     handlePageView: (opts?:{url:string, title:string}) => (s:Monitor, a:MonitorActions) => Monitor, 
-    handleEvent: (data:{eventCategory:string,eventAction:string,eventLabel?:string}) => (s:Monitor, a:MonitorActions) => Monitor
+    handleEvent: (data:{eventCategory:string,eventAction:string,eventLabel?:string}) => (s:Monitor, a:MonitorActions) => Monitor, 
+    showFavCount: () => (s:Monitor, a:MonitorActions) => Monitor, 
+    disposeFavCount: () => (s:Monitor, a:MonitorActions) => Monitor
 }
 const createMonitorActions = (cli:ApiClient):MonitorActions => (
     {
@@ -799,6 +861,11 @@ const createMonitorActions = (cli:ApiClient):MonitorActions => (
             if (body['isMember']) {
                 trigger('userEntered', body)
             }
+            const favStatus = (body['favCount'] > 0) ? 0 : -1
+            if (favStatus == 0) {
+                trigger('wallWanted', {info:null, show:actions.showFavCount})
+                //trigger('notifyFav', body['favCount'])
+            }
             if (monitor.waited) {
                 trigger('checkUserResponse', body)
             }
@@ -806,7 +873,7 @@ const createMonitorActions = (cli:ApiClient):MonitorActions => (
             ga('set', 'dimension1', body['sendCount'])
             ga('set', 'metric1', body['sendCount'])
             ga('send', 'pageview')
-            return {tag:'Monitor', info:body, quitSession:monitor.quitSession, waited:false, lastPage:''}
+            return {tag:'Monitor', info:body, quitSession:monitor.quitSession, waited:false, lastPage:'', favStatus:favStatus}
         }, 
         handleUserEnter: (body) => ({info, ...rest}, a) => {
             ga('set', 'dimension1', body['sendCount'])
@@ -857,15 +924,58 @@ const createMonitorActions = (cli:ApiClient):MonitorActions => (
             }
             ga('send', 'event', data)
             return {quitSession:false, ...rest}
+        }, 
+        showFavCount: () => ({favStatus, ...rest}, actions) => {
+            return {favStatus:1, ...rest}
+        }, 
+        disposeFavCount: () => ({favStatus, ...rest}, actions) => {
+            trigger('wallEnded')
+            return {favStatus:2, ...rest}
         }
     }
 )
-const viewMonitor = (state:Monitor, actions:MonitorActions) => (
-    <div style={{display:"none"}}>
-        <p>{JSON.stringify(state.info)}</p>
-        <button type="button" onclick={actions.monitor}>更新</button>
-    </div>
-)
+const viewMonitor = (state:Monitor, actions:MonitorActions) => {
+    if (state.info && state.favStatus == 1) {
+        return (
+            <div class="wall-wrapper" key="favCountWallWrapper" onremove={onremove}>
+                <div class="wall" key="favCountWall" oncreate={oncreate}>
+                    <div class="wall-main">
+                        <div class="flex">
+                            <div class="dummy-attractor">
+                            </div>
+                            <div class="center-aligned">
+                                あなたのflowyでの送信に{state.info['favCount']}人が<i class="material-icons">thumb_up</i>しました。
+                            </div>
+                            <div class="center-aligned">
+                                <button class="reversed wall-effect" onclick={() => actions.disposeFavCount()}>OK</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="wall-control">
+                        <button onclick={() => actions.disposeFavCount()} title="閉じる"><i class="material-icons">close</i></button>
+                    </div>
+                </div>
+                <div class="dummy-wall">
+                    <div class="wall-main">
+                        <div class="flex">
+                            <div class="attractor" oncreate={oncreate}>
+                                <i class="material-icons">thumb_up</i>
+                            </div>
+                            <div class="dummy-content">
+                                あなたのflowyでの送信に{state.info['favCount']}人が<i class="material-icons">thumb_up</i>しました。
+                            </div>
+                            <div class="dummy-content">
+                                <button>OK</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )
+    } else {
+        return null
+    }
+}
 
 
 interface State {
@@ -875,7 +985,8 @@ interface State {
     monitor:Monitor, 
     notification:Notification, 
     feedbackForm:FeedbackForm, 
-    contactForm:ContactForm
+    contactForm:ContactForm, 
+    wallManager:WallManager
 }
 
 interface Actions {
@@ -885,7 +996,8 @@ interface Actions {
     monitor:MonitorActions, 
     notification:NotificationActions, 
     feedbackForm:FeedbackFormActions, 
-    contactForm:ContactFormActions
+    contactForm:ContactFormActions, 
+    wallManager:WallManagerActions
 }
 const cli = createXhrApiClient()
 const actions:Actions = {
@@ -895,7 +1007,8 @@ const actions:Actions = {
     monitor:createMonitorActions(cli), 
     notification:createNotificationActions(), 
     feedbackForm:createFeedbackActions(cli), 
-    contactForm:createContactFormActions(cli)
+    contactForm:createContactFormActions(cli), 
+    wallManager:createWallManagerActions()
 }
 
 
@@ -919,7 +1032,8 @@ const initialState = {
     monitor: {tag:"Monitor", info:null, quitSession:false, waited:false}, 
     notification: {tag:"Notification", serial:1, queue:[], msg:null}, 
     feedbackForm: {tag:""},  // effective null
-    contactForm: {tag:""}  // effective null
+    contactForm: {tag:""},  // effective null
+    wallManager: {tag:"WallManager", status:0, queue:[]}
 }
 
 window.addEventListener('load', () => {
@@ -932,11 +1046,14 @@ document.body.addEventListener('contactWanted', main.contactForm.create)
 document.body.addEventListener('checkUser', main.monitor.getLoginStatus)
 document.body.addEventListener('notifyFine', (e:CustomEvent) => (main.notification.addFine(e.detail)))
 document.body.addEventListener('notifyPoor', (e:CustomEvent) => main.notification.addPoor(e.detail))
+document.body.addEventListener('notifyFav', (e:CustomEvent) => main.notification.addFav(e.detail))
 document.body.addEventListener('userEntered', (e:CustomEvent) => main.monitor.handleUserEnter(e.detail))
 document.body.addEventListener('userLeaved', (e:CustomEvent) => main.monitor.handleUserLeave(e.detail))
 document.body.addEventListener('parcelSent', (e:CustomEvent) => main.monitor.handleParcelSend())
 document.body.addEventListener('pageView', (e:CustomEvent) => main.monitor.handlePageView(e.detail))
 document.body.addEventListener('event', (e:CustomEvent) => main.monitor.handleEvent(e.detail))
+document.body.addEventListener('wallWanted', (e:CustomEvent) => { main.wallManager.request(e.detail)})
+document.body.addEventListener('wallEnded', main.wallManager.hidden)
 
 window.requestAnimationFrame(main.monitor.monitor)
 

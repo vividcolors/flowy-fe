@@ -4,7 +4,7 @@ self.addEventListener('install', function (event) {
 });
 
 self.addEventListener('activate', function (event) {
-  event.waitUntil(clients.claim());
+  event.waitUntil(self.clients.claim());
   console.log('V1 now ready to handle fetches!');
 });
 

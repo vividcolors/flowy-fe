@@ -1,7 +1,7 @@
 
 import { Cons, assem20, assem120, assem020 } from './adt';
 import { h, app } from "hyperapp";
-import { zipWith, remove, insert } from "ramda";
+import { zipWith, remove, insert, all } from "ramda";
 import xhr from 'xhr';
 import { XhrUrlConfig } from 'xhr';
 import { sha256 } from 'js-sha256';
@@ -26,11 +26,13 @@ interface Parcel {
 /* API client ------------------------- */
 interface ParcelReadingResult {
     parcel :Parcel, 
-    urls :string[]
+    urls :string[], 
+    firstInteraction :boolean
 }
 type ParcelReadingCallback = (c:Condition<ParcelReadingResult, Problem>) => any
 interface ApiClient {
-    read: (parcelId:string, pw:string, k:ParcelReadingCallback) => void
+    read: (parcelId:string, pw:string, k:ParcelReadingCallback) => void, 
+    sendFav: (parcelId:string) => void
 }
 
 function createApiClient():ApiClient {
@@ -54,6 +56,16 @@ function createApiClient():ApiClient {
                 } else {
                     k(poor(problem({detail:'エラーが発生しました。URLが間違っているか、期限切れの可能性があります。'})) as Condition<ParcelReadingResult, Problem>)
                 }
+            })
+        }, 
+        sendFav: (parcelId:string) => {
+            xhr({
+                url: C.API_BASE + '/parcels/' + parcelId + '/fav', 
+                method: 'POST', 
+                json: true, 
+                withCredentials: true
+            }, (err, res, body) => {
+                // ignore
             })
         }
     }
@@ -166,7 +178,7 @@ function viewSetup(state:Setup, actions:SetupActions) {
                                     <div class="control">
                                         <label for="">パスワード</label>
                                         <input type="password" value={state.pw} oninput={actions.changePw} class="default-input" />
-                                        {showParam('pw', state.prob, (msg) => (<span class="poor">{msg}</span>))}
+                                        <small>{showParam('pw', state.prob, (msg) => (<span class="poor">{msg}</span>))}</small>
                                     </div>
                                 </div>
                                 <div class="modal-footer">
@@ -174,6 +186,7 @@ function viewSetup(state:Setup, actions:SetupActions) {
                                     <button type="submit" class="primary" onclick={() => actions.read()}>送信する</button>
                                 </div>
                             </div>
+                            <div class={`spinner ${state.parcelStatus == 1 ? 'enabled' : ''}`}></div>
                         </div>
                     </form>
                 </div>
@@ -192,6 +205,7 @@ function viewSetup(state:Setup, actions:SetupActions) {
                         </div>
                     </div>
                 </div>
+                <div class={`spinner ${state.parcelStatus != 2 ? 'enabled' : ''}`}></div>
             </div>
         </div>
     )
@@ -202,20 +216,25 @@ interface Download {
     tag :"Download", 
     parcel :Parcel, 
     files :{name:string, size:number, url:string, downloaded:boolean}[], 
-    started :boolean
+    started :boolean, 
+    favStatus :number,  // -1:no-need, 0:yet, 1:displaying, 2:done
 }
 interface DownloadActions {
     init: (prr:ParcelReadingResult) => (s:Download, a:DownloadActions) => Download, 
-    getFile: (idx:number) => (s:Download, a:DownloadActions) => Download
+    getFile: (idx:number) => (s:Download, a:DownloadActions) => Download, 
+    showFaver: () => (s:Download, a:DownloadActions) => Download, 
+    disposeFaver: () => (s:Download, a:DownloadActions) => Download, 
+    sendFav: () => (s:Download, a:DownloadActions) => Download, 
 }
-function createDownloadActions():DownloadActions {
+function createDownloadActions(api:ApiClient):DownloadActions {
     const promoteFile = (f0:{name:string, size:number}, url:string) => {
         return {name:f0.name, size:f0.size, url:url, downloaded:false}
     }
     return {
         init: (prr) => (_state, actions) => {
             const files = zipWith(promoteFile, prr.parcel.files, prr.urls)
-            return {tag:"Download", parcel:prr.parcel, files:files, started:false}
+            const favStatus = (prr.firstInteraction) ? 0 : -1
+            return {tag:"Download", parcel:prr.parcel, files:files, started:false, favStatus:favStatus}
         }, 
         getFile: (idx) => ({files, started, ...rest}, actions) => {
             const {downloaded:_, ...fileRest} = files[idx]
@@ -223,7 +242,28 @@ function createDownloadActions():DownloadActions {
             if (! started) {
                 trigger('pageView', {'page':'/receiver/download','title':'ファイルの受信'})
             }
+            const allFlag = all(f => f.downloaded, files2)
+            console.log('')
+            if (rest.favStatus == 0 && allFlag) {
+                window.setTimeout(() => {
+                    console.log('')
+                    trigger('wallWanted', {info:null, show:actions.showFaver})
+                }, 2000)
+            }
             return {files:files2, started:true, ...rest}
+        }, 
+        showFaver: () => ({favStatus, ...rest}, actions) => {
+            console.log('')
+            return {favStatus:1, ...rest}
+        }, 
+        disposeFaver: () => ({favStatus, ...rest}, actions) => {
+            trigger('wallEnded')
+            return {favStatus:2, ...rest}
+        }, 
+        sendFav: () => ({favStatus, ...rest}, actions) => {
+            api.sendFav(rest.parcel.id)
+            trigger('wallEnded')
+            return {favStatus:2, ...rest}
         }
     }
 }
@@ -240,11 +280,35 @@ function viewDownload(state:Download, actions:DownloadActions) {
         const key = hexToBin(keyHex)
         const hash = sha256.array(key)
         const hashHex = binToHex(hash)
+        // インストール直後の場合、サービスワーカーがHTTPリクエストをフックしないケース
+        // がある模様（FirefoxとEdgeで出会った）。
+        // 本番環境ではリクエスト先は常にhttps://flowy.jp/fe/proxy/...になるので、
+        // サービスワーカーがフックしなくてもCloudflareのWorkersがバックアップとして
+        // 動く。
+        // 開発環境ではその限りではない。
         const base = ('serviceWorker' in navigator) ? '/' : 'https://flowy.jp/'
         return base + `fe/proxy/${oid}/${keyHex}/${hashHex}` + parser.search
     }
     return (
         <div>
+            {callIf(state.favStatus == 1, () =>
+                <div class="wall-wrapper" key="faverWrapper" onremove={onremove}>
+                    <div class="wall" key="faver" oncreate={oncreate}>
+                        <div class="wall-main">
+                            <div class="flex">
+                                <p>ファイルを快適に受け取れましたか？<br />
+                                flowyを気に入ったら[<i class="material-icons">thumb_up</i>]で送信者に伝えましょう。</p>
+                                <div class="bottom-aligned">
+                                    <button class="primary large" onclick={() => window.setTimeout(() => actions.sendFav(), 300)}><i class="material-icons">thumb_up</i></button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="wall-control">
+                            <button onclick={() => actions.disposeFaver()} title="閉じる"><i class="material-icons">close</i></button>
+                        </div>
+                    </div>
+                </div>
+            )}
             <div class="frame">
                 <div class="frame-header">ファイルの受信</div>
                 <div class="frame-body" key="download" oncreate={oncreate}>
@@ -253,7 +317,7 @@ function viewDownload(state:Download, actions:DownloadActions) {
                         <div class="control">
                             <label for="">ファイル</label>
                             {state.files.map((file, idx) => (
-                                <a href={wrapUrl(file.url)} key={idx} onclick={() => (actions.getFile(idx), true)} class={`download ${file.downloaded ? 'downloaded' : ''}`}>{file.name}<span class="meta">({showSize(file.size)})</span></a>
+                                <a href={wrapUrl(file.url)} key={idx} onclick={() => (actions.getFile(idx), true)} class={`download ${file.downloaded ? 'downloaded' : ''}`} target={isiOS() ? '_blank' : '_self'}>{file.name}<span class="meta">({showSize(file.size)})</span></a>
                             ), state.files)}
                             {callIf(isiOS(), () => <small><a href="/contents/with-ios.html" target="_blank">iPhoneでPDFや動画を閲覧・保存できない方はこちら</a>もお読みください。</small>)}
                         </div>
@@ -282,7 +346,7 @@ function createInitialState():State {
 function createActions(api:ApiClient):Actions {
     return {
         setup: createSetupActions(api), 
-        download: createDownloadActions()
+        download: createDownloadActions(api)
     }
 }
 type View<S,A> = (s:S, a:A) => JSX.Element
