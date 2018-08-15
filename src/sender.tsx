@@ -183,7 +183,6 @@ interface InputActions {
     submitDone: (c:Condition<ParcelCreationResult, Problem>) => (s:Input, a:InputActions) => Input
 }
 function createInitialInput():Input {
-    window.requestAnimationFrame(() => allActions.input.init())
     return {
         tag:"Input", 
         serial:0, 
@@ -922,4 +921,5 @@ function view(state:State, actions:Actions) {
 let allActions
 window.addEventListener('load', () => {
 allActions = app(createInitialState(), createActions(createApiClient(), createDepotClient()), view, document.getElementById('sender'))
+window.requestAnimationFrame(() => allActions.input.init())
 })
